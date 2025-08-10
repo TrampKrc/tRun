@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+/OutFiles/new-channel-log08092025-162236.log
+/OutFiles/new-channel-log08092025-162756.log
+/OutFiles/new-channel-log08092025-162812.log
+/OutFilesnew-channel-log08092025-163337.log
+/OutFilesnew-channel-log08092025-165438.log
