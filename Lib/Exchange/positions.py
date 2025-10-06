@@ -1,435 +1,394 @@
 # -*- coding: utf-8 -*-
-import os
-import sys
-
-import tools as T, utils as U
-
-#from binance_exchange import binance_Exchange
-from yk_bybit import yk_Bybit_demo
-
-#from bybit_exchange_pro import bybit_Exchange_pro
-
-"""
-root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(root + '/python')
-import ccxt  # noqa: E402
 from pprint import pprint
-print('CCXT Version:', ccxt.__version__)
-exchange = ccxt.bybit ({
-    'apiKey': 'iltB7keoLpILeuIhkF',
-    'secret': 'HCPAsZ3Cb5wVwlKK2HTkzyHlg0pn2cYdEaSV',
-})
-"""
 
-class  bybitOrder(object):
-    type = 'limit'
-    side = 'sell'
-    size = 0
+from ccxt.base.types import (Balances, Currency, Greeks,
+     Int, Leverage, Market, MarketInterface, Num,
+     Option, OptionChain,
+     Order, OrderBook, OrderRequest, OrderSide, OrderType, Str,
+    Strings, Ticker, Tickers, Trade, Transaction, TransferEntry)
 
-    order_price = 0
-    stop_loss = 0
 
-    def __init__(self, monitor, sym, type='market', side='buy', amount=0, leverage=50):
+from base_exchange import base_Exchange, Position, base_Order
 
-        self.pos_MaxLossProc = 40     # max loss % per pos;  40%;
+from dataclasses import dataclass, field
+from typing import Literal, Union, TypedDict, Optional, Any
 
-        self.pos = None
-        self.sl_id = None
-        self.sl_order = "None"
-        
-        self.monitor = monitor
-        self.exc = monitor._exchange    # low level
+from enum import Enum
 
-        self.sym  = sym  + ":USDT" #BTC/USDT:USDT"
-        self.type = type.lower()
-        self.side = side.lower()
+class orderType(Enum):
+    Market = "market"
+    Limit = "limit"
+    StopMarket = "StopMarket"
+    StopLimit = "StopLimit"
+    Info = "info"
 
-        self.coin_price = self.exc.fetch_ticker( self.sym )['last']
+class orderState(Enum):
+    NotDef = 'not defined'
+    Created = "created"
+    Pending = "pending"
+    Active  = "active"
+    Closed  = "closed"
+    Canceled= "canceled"
 
-        self.check_leverage_and_size( leverage, amount )
+class orderSide(Enum):
+    Buy = "buy"
+    Sell= "sell"    
 
-        self.monitor.logInfo( " tradePos: Order==========================:" )
-        self.monitor.logInfo( self.sym, self.type, self.side, f"size={self.size}")
+@dataclass
+class orderData():
+    id:    Optional[ str] = ''
+    side:  Optional[ orderSide ] = None
+    type:  Optional[ orderType ] = None
+    usdt:  Optional[float] = 0
+    coins: Optional[float] = 0 
+    price: Optional[float] = 0 
+    triggerPrice: Optional[float] = 0
+    order:  Optional[base_Order] = None
+    state:  Optional[orderState] = orderState.NotDef
+    params: Optional[dict] = None
 
-    @classmethod
-    def init(cls, monitor, msg: dict):
-        """
-        Create a bybitOrder instance from a message dictionary.
-        :param msg: Dictionary containing order details.
-        :return: bybitOrder instance.
-        """
-        monitor = monitor
-        sym = msg.get('sym', 'BTC/USDT')
-        type = msg.get('type', 'market')
-        side = msg.get('side', 'buy')
-        size = msg.get('size', 0)
-        leverage = msg.get('leverage', 50)
+    def set(self, data: dict):
+        for k, v in data.items():
+            if k in self.__dict__:
+                self.__dict__[k] = v
 
-        return cls(monitor, sym, type, side, size, leverage)
 
-    def check_leverage_and_size(self, leverage, amount ):
-        self.set_leverage( leverage)
+@dataclass
+class BybitPosition:
 
-        self.usd = amount  # USDT
-        self.check_position_size()
+    exc: Any
+    symbol:   str     # 'BTC/USDT'
+    leverage: float
+
+    params: Optional[dict] = field(default_factory=dict)
+    msg_timestamp: Optional[int] = None
+    info: Optional[dict] = None
+    # ---------------------------------
+
+    main_order: Optional[orderData] = field(default_factory=orderData)
+    sl_order: Optional[orderData]  = field(default_factory=orderData)
+    tp1_order: Optional[orderData]  = field(default_factory=orderData)
+    tp2_order: Optional[orderData]  = field(default_factory=orderData)
+    tp3_order: Optional[orderData]  = field(default_factory=orderData)
+
+
+    """
+    entryPrice: float
+    markPrice: float
+    liquidationPrice: float
+    initialMargin: float
+    initialMarginPercentage: float
+    maintenanceMargin: float
+    maintenanceMarginPercentage: float
+    unrealizedPnl: float
+    percentage: Optional[float] = None
+    contracts: Optional[float] = None
+    notional: Optional[float] = None
+    marginRatio: Optional[float] = None
+    datetime: Optional[str] = None
+    """
+    
+    def __post_init__( self ):
+        s1 = self.symbol.split('/')  # 'MANA/USDT'
+        self.symbol_s = s1[0] + s1[1]  # 'MANAUSDT'
+        self.symbol_f = self.symbol +":"+s1[1]  # 'MANA/USDT:USDT'
+
+        self._exc = self.exc._exchange
+        self.set_leverage()
+        orders = []
+
+        positionSide: Literal['Long', 'Short']
+
 
     def set_leverage(self, leverage=0):
 
-        s1 = self.sym.split('/')  # 'MANA/USDT:USDT'
-        s2 = s1[1].split(':')  # USDT:USDT
-        sym = s1[0] + s2[1]  # 'MANAUSDT'
+        #s1 = self.sym.split('/')  # 'MANA/USDT:USDT'
+        #s2 = s1[1].split(':')  # USDT:USDT
+        #sym = s1[0] + s2[1]  # 'MANAUSDT'
 
-        rc = self.exc.fetch_leverage_tiers([sym], {'symbol': sym})
-        lev = int(rc[self.sym][0]['maxLeverage'])
+        rc = self._exc.fetch_leverage_tiers([self.symbol_s], {'symbol': self.symbol_s})
+        lev = int( rc[ self.symbol_f ] [0]['maxLeverage'])
 
         if leverage > 0: self.leverage = leverage
         if lev < self.leverage: self.leverage = lev
 
         if lev != self.leverage:
             try:
-                rcl = self.exc.set_leverage(self.leverage, self.sym)
+                rcl = self._exc.set_leverage(self.leverage, self.symbol_f)
             except Exception as e:
-                self.monitor.logInfo("OpenPosition Exception: ", e)
-                self.monitor.logException(e)
+                self.exc.logInfo("OpenPosition Exception: ", e)
+                self.exc.logException(e)
                 # if 'retcode' == 110043 - leverage is not modify
 
-        self.monitor.logInfo( f"tradePos: Leverage = {self.leverage} " )
+        self.exc.logInfo(f"tradePos: Leverage = {self.leverage} ")
 
-    def check_position_size(self):
+    def set_Main_order(self, type: orderType, side: orderSide,
+                         usdt=0, coins=0,
+                         price=None, triggerPrice=None, parms=None):
 
-        # leverage = 1; price = 100 X/USDT; money = $100 USD; pos = 100 USDT ( 1 X/USDT )
-        # price2 = 90 X/USDT; price change = -$10 = -10%  pos change = -$10; money loss = -$10 = 10%
+        self.main_order.type = type
+        self.main_order.side = side
 
-        # leverage = 10; price = 100 X/USDT; money = $100 USD; pos = 1000 USDT   ( 10 * X/USDT )
-        # price2 = 90 X/USDT; price change = -$10 = -10%  pos change = 10 * price change = -$100; money loss = 100%
+        self.main_order.usdt = usdt
+        self.main_order.coins = coins if coins > 0 else self.coinAmount( self.main_order.usdt ) # number of coins
 
-        # price change = D%  pos change = ( D% * leverage )% = L%  money loss = L%
+        self.main_order.price = price
+        self.main_order.triggerPrice = triggerPrice
+        self.main_order.params = parms
 
-        self.size = self.usd * self.leverage / self.coin_price  # number of coins
+        self.main_order.state = orderState.Created
 
-        PriceChangeProc = ( self.pos_MaxLossProc/self.leverage ) / 100
-        self.stop_loss = self.coin_price * (1 + ( -PriceChangeProc if self.side == 'buy' else PriceChangeProc ) )
+    def add_StopLoss_order(self, type, usdt=0, coins=0, sl_price=0, sl_limit_price=None ):
 
-#    def openPosition(self, tp=[0,0,0], tpd=[0,0,0], tpsize=[0,0,0], order_price=0, sl=[0,0] ):
-    def openPositionX(self, tp=[0,0,0], tpsize=[0,0,0], sl=[0,0] ):
-        #self.entry_price = order_price
-        #self.order_price = order_price
-        self.tp = tp
-        self.tpsize = tpsize
+        side = orderSide.Sell if self.main_order.side == orderSide.Buy else orderSide.Buy
 
-        cur_price = order_price
-        if self.type == 'market':
-            tik = self.exc._exchange.fetch_ticker(self.sym)
-            #self.order_price = int(tik['info']['markPrice'])
-            cur_price = tik['last']
+        self.sl_order.side = side
+        self.sl_order.type = type
+        self.sl_order.usdt = usdt
+        self.sl_order.coins = coins if coins > 0 else self.coinAmount( self.sl_order.usdt ) # number of coins
+        self.sl_order.price = sl_limit_price
+        self.sl_order.triggerPrice = sl_price
 
-        if sl[0] > 0: self.stop_loss = sl[0]
-        else:
-            self.stop_loss  = cur_price - sl[1] if self.side == 'buy' else cur_price + sl[1]
+        self.params['stopLoss'] = {
+            'amount': self.sl_order.coins,
+            'price': sl_limit_price,
+            'triggerPrice': sl_price,
+            'type': type,  # 'market' or 'limit'
+            'priceType': 'mark'  # last | mark | index
+        }
 
-        for i in range(3):
-            if self.tp[i] == 0:
-                self.tp[i] = cur_price + tpd[i] if self.side == 'buy' else cur_price - tpd[i]
+        self.sl_order.state = orderState.Created
+        pprint(self.params)
+
+    def add_TakeProfit_order(self, num, type, usdt=0, coins=0, tp_price=0, tp_limit_price=None ):
+        match num:
+            case 1:
+                ord = self.tp1_order
+            case 2:
+                ord = self.tp2_order
+            case 3:
+                ord = self.tp3_order
+            case _:
+                self.exc.logError(f"Position: add_takeProfit_order: unknown tp_num {num}")
+                raise
+
+        side = orderSide.Sell if self.main_order.side == orderSide.Buy else orderSide.Buy
+
+        ord.side = side
+        ord.type = type
+        ord.usdt = usdt
+        ord.coins = coins if coins > 0 else self.coinAmount( ord.usdt ) # number of coins
+        ord.price = tp_limit_price
+        ord.triggerPrice = tp_price
+
+        self.params['takeProfit'] = {
+            'amount': ord.coins,
+            'price': tp_limit_price,
+            'triggerPrice': tp_price,
+            'type': type,           # 'market' or 'limit'
+            'priceType': 'mark'  # last | mark | index
+        }
+
+    def open_TakeProfit_Part(self, type='market', usdt=0, coins=0, price=None, tp_price=0, params={}):
+        # add a new takeProfit order
+        # we have to have open position !
+        side = orderSide.Sell if self.main_order.side == orderSide.Buy else orderSide.Buy
+
+        coin = coins if coins > 0 else self.coinAmount( usdt ) # number of coins
 
         p = {
+            'tpSize': str(coin),
             'tpslMode': 'Partial',
-            'tpSize': str( tpsize[2] ),
-            'slSize': str(self.size),
-
-            'takeProfit': {
-                'triggerPrice': self.tp[2],
-                'price': self.tp[2],
-                'amount': 0.0,
-                'type': 'limit',
-                'priceType': 'mark'  # last, index
-            },
-            'stopLoss': {
-                'triggerPrice': self.stop_loss,
-                'price': self.stop_loss,
-                'amount': 0.0,
-                'type': 'limit',
-                'priceType': 'mark'  # last, index
-            }
-        }
-        ord = self.exc.create_order_with_take_profit_and_stop_loss(
-              self.sym, self.type, self.side, self.size, params=p )
-
-        self.sl_id = ord['id']
-
-        self.pos = self.monitor.FetchOpenPosition(self.sym)
-        self.entry_price = self.pos['entryPrice']
-
-        if self.entry_price is not None:
-            self.changeSL( self.stop_loss )
-            return True
-
-        self.addTPLimit( self.tpsize[0], self.tp[0] )
-        self.addTPLimit( self.tpsize[1], self.tp[1] )
-
-        return False
-
-    def openPosition(self, tp=[], sl=[0,0] ):
-
-        len_tp = len( tp )
-        if len_tp == 0 or len_tp > 4 :
-            self.monitor.logError("tradePos **************   size of TP is incorrect ")
-            return None
-
-        self.tp = tp
-        self.sl = sl
-
-        if self.sl[0] == 0:
-            self.sl[0] = self.stop_loss
-
-        # check tp sizes
-        if   len_tp == 1:
-            self.tpsize = [ self.size ]
-
-        elif len_tp == 2:
-            self.tpsize = [self.size * 0.5, self.size * 0.5 ]
-
-        elif len_tp == 3:
-            self.tpsize = [self.size * 0.4, self.size * 0.4, self.size * 0.2 ]
-
-        elif len_tp == 4:
-            self.tpsize = [self.size * 0.3, self.size * 0.3, self.size * 0.2, self.size * 0.2 ]
-
-        n = len_tp - 1
-        p = {
-            'tpslMode': 'Partial',
-            'tpSize': str( self.tpsize[n] ),
-            'slSize': str(self.size),
-
-            'takeProfit': {
-                'triggerPrice': tp[n],
-                'price': tp[n],
-                'amount': self.tpsize[n],
-                'type': 'limit',
-                'priceType': 'mark'  # last, index
-            },
-            'stopLoss': {
-                'triggerPrice': sl[0],
-                'price': sl[0],
-                'amount': self.size,
-                'type': 'limit',
-                'priceType': 'mark'  # last, index
-            }
-        }
-
-        try:
-            self.monitor.logInfo( "tradePos Order parameters ==========================:" )
-            self.monitor.logInfo( p )
-
-            self.monitor.logInfo( " ===============:")
-            self.monitor.logInfo( "tradePos: Create Main Order ===============:")
-
-            #ord = self.exc.create_order_with_take_profit_and_stop_loss(
-            ord = self.exc.create_order(
-                  self.sym, self.type, self.side, self.size, params=p )
-
-            self.monitor.logInfo( " ===============:")
-            self.monitor.logInfo( "tradePos: Fetch position ===============:")
-
-            self.pos = self.exc.fetch_position(self.sym, {})
-
-            self.entry_price = self.pos['entryPrice']
-            self.monitor.logInfo(f"tradePos: Order Entry price: {self.entry_price}")
-
-            self.monitor.logInfo( "tradePos: Create TP/SL ===============:")
-
-            for i in range( len_tp ):
-                if self.tp[i] > 0 and self.tpsize[0] > 0:
-                    self.monitor.logInfo(f"tradePos: Create TP/SL ===============: {i}")
-                    self.addTPLimit( self.tpsize[i], self.tp[i] )
-
-            self.monitor.logInfo( " ===============:")
-            self.monitor.logInfo( "tradePos: Fetch orders ===============:")
-
-            self.orders = self.exc.fetch_open_orders(self.sym )
-
-            for ord in self.orders:
-                if 'StopLoss' in ord['info']['createType']:
-                    self.sl_order = ord
-
-        except Exception as e:
-            self.monitor.logInfo("OpenPosition Exception: ", e )
-            self.monitor.logException(e)
-
-        return self.pos
-
-    def readPosition(self):
-        self.pos = self.exc.FetchOpenPosition(self.sym)
-        self.entry_price = self.pos['entryPrice']
-        if self.entry_price is not None:
-            #self.type = self.pos['type']
-            self.side = self.pos['info']['side'].lower()
-            self.size = float(self.pos['info']['size'])
-            self.order_price = self.entry_price
-
-            return True
-        return False
-
-    def waitOpenPosition(self, timeout=1):
-        while timeout > 0:
-            self.pos = self.exc.FetchOpenPosition( self.sym )
-            self.entry_price = self.pos['entryPrice']
-            if self.entry_price is not None:
-                return True
-            time.sleep(1)
-            timeout -= 1
-
-        return False
-
-    def addTPLimit(self, size, price ):
-        side = 'sell' if self.side == 'buy' else 'buy'
-        p = {'tpSize': str(size), 'tpslMode': 'Partial', 'PositionTpSl': True}
-
-        return self.exc.create_take_profit_order( self.sym, 'limit', side, size, price, takeProfitPrice=price, params=p )
-
-
-    def addTP__(self, size, d_price, d_tr_price = 1):
-        if self.side == 'buy':
-            side = 'sell'
-            tp_price = self.order_price + d_price
-            tr_price = tp_price - d_tr_price
-        else:
-            side = 'buy'
-            tp_price = self.order_price - d_price
-            tr_price = tp_price + d_tr_price
-
-        param = {
-            'takeProfitPrice': tr_price,
-            'tpSize': str(size),
-            'positionIdx': 0,
             'PositionTpSl': True
         }
-        self.exc.CreateTakeProfitandStopLoss2( self.sym, 'limit', side, size, tp_price, param=param )
+        self.info = self._exc.create_take_profit_order( self.symbol_f, type,
+                                            side.value, coin, price, tp_price, p )
+        return self.info
 
-    def EditLimitOrder(self, id, amount, price, tr_price ):
-        side = 'sell' if self.side == 'buy' else 'buy'
-        return self.exc._exchange.edit_order( id, self.sym, 'limit', side, amount, price, params={'triggerPrice': tr_price })
+    def open_StopLoss(self, type=orderType.Market, usdt=0, coins=0, price=None, sl_price=0, params={}):
+        # add a new takeProfit order
+        # we have to have open position !
+        side = orderSide.Sell if self.main_order.side == orderSide.Buy else orderSide.Buy
 
-    def editSL(self, price, amount = None ):
-        #dd = 'sell' if self.side == 'buy' else 'buy'
-        amount = self.size if amount is None else amount
-        return self.EditLimitOrder( self.sl_order['id'], amount, price, price )
+        coin = coins if coins > 0 else self.coinAmount( usdt ) # number of coins
 
-    def str(self):
-        if self.pos is not None:
-            return ( "\n ================================="
-                f" {self.sym} {self.type} {self.side} size={self.size} leverage= {self.leverage}\n"
-                f" entry_price={self.entry_price} order_price={self.order_price}\n"
-                f" takeProfit: {self.tp}  profitSize: {self.tpsize }\n"
-                f" stopLoss: {self.sl}\n"
-                f" SLOrder: {self.sl_order}\n"
-                "=================================\n"
-            )
+        self.info = self._exc.create_stop_loss_order(
+            self.symbol_f, type.value, side.value, coin, price, sl_price, params )
+        return self.info
+
+
+
+    def x_create_mainOrder(self, side: orderSide,
+                            type: orderType, 
+                            usdt=0, coins=0, price=0, stopPrice=0):
+        
+        self.main_order.set( {
+            'order': None,
+            'state': orderState.Created,
+            'side': side,
+            'type': type
+        })
+                        #'usdt': usdt,
+                        #'coins': coins,
+
+                        #'price': price,
+                        #'stopPrice': stopPrice }
+        
+        match type:
+            case orderType.Market:
+                self.main_order.price = None
+                self.main_order.triggerPrice = None
+                
+            case orderType.Limit:
+                if price == 0:
+                    self.exc.logError(f"Position: add_openOrder: limit order need price {self.sym}")
+                    return
+                
+                self.main_order.price = price
+                self.main_order.triggerPrice = None
+
+            case orderType.Stop:    
+                if stopPrice == 0:
+                    self.exc.logError(f"Position: add_openOrder: stop order need stopPrice {self.sym}")
+                    return
+            case _:
+                self.exc.logError(f"Position: add_openOrder: unknown order type {type} {self.sym}")
+                return
+        self.monitor.logInfo(f"Position: add_openOrder: {self.open} {self.sym}")
+        self.check_coinAmount()
+
+    def _send_order(self):
+        ord = self.main_order
+
+        print( f"--> _send_order: {self.symbol}, {ord.type}, {ord.side}, {ord.coins=}, {ord.price=}, \n {ord.params=}" )
+
+        if ord.type in  [ orderType.StopMarket, orderType.StopLimit ]:
+            params = {
+                'triggerDirection': 'above' if ord.side == orderSide.Buy else 'below'
+            }
+        #self.params = {'triggerDirection': 'up' if self.side == 'sell' else 'down'}
+
+#            if stopPrice is None: stopPrice = self.stopPrice
+            self.info = self._exc.create_stop_order( self.symbol_f, ord.type.value, ord.side.value,
+                    ord.coins, ord.price, ord.triggerPrice, params=self.params)
         else:
-            return "\n ********* Position is empty !  ************\n"
+#            self.last_order = self._exc.create_order( self.symbol_f, ord.type.value,
+#               ord.side.value, ord.coins, ord.price, self.params )
 
-class  trade( object ):
-    type = 'limit'
-    side = 'sell'
-    size = 0
+            self.last_order = {'id':456}  # fake id
+            print( " Open Order:")
+            print( f" {self.symbol_f=} {ord.type.value=}\
+            {ord.side.value=} {ord.coins=} {ord.price=} {self.params=}" )
 
-    order_price = 0
-    stop_loss = 0
+        print( f'Sent order {self.last_order['id'] = }' )
 
-    def __init__(self, exchange, sym, type=None, side=None, size=None):
-        self.pos = {}
-        self.sl_id = None
+        return self.last_order
 
-        self.exc = exchange
-        self.sym  = sym
-        self.type = type
-        self.side = side
-        self.size = size
 
-    def openPosition(self, order_price=0, d_stop_loss=0 ):
-        self.entry_price = order_price
-        self.order_price = order_price
-        self.stop_loss = d_stop_loss
+        if self.open['state'] != orderState.Created:
+            self.exc.logError(f"Position: _send_order: position already opened {self.sym}")
+            return
 
-        if self.type == 'market':
-            tik = self.exc._exchange.fetch_ticker(self.sym)
-            #self.order_price = int(tik['info']['markPrice'])
-            self.order_price = tik['last']
+        self.open['state'] = orderState.Pending
+        self.monitor.logInfo(f"Position: _send_order: {self.open} {self.sym}")
 
-        self.stop_loss  = self.order_price - d_stop_loss if self.side == 'buy' else self.order_price + d_stop_loss
+        self.open['order'].openMaker_Market()
+        self.orders.append( self.open['order'] )
 
-        ord = self.exc._exchange.create_order_with_take_profit_and_stop_loss(self.sym, self.type, self.side, self.size,
-                                                     self.order_price, None, self.stop_loss, {'tpslMode': 'partial'})
+        self.open['state'] = orderState.Active
 
-        self.sl_id = ord['id']
+    def open(self):
 
-        self.pos = self.exc.FetchOpenPosition(self.sym)
-        self.entry_price = self.pos['entryPrice']
-        if self.entry_price is not None:
+        if self.main_order.state != orderState.Created:
+            self.exc.logError(f"Position: openOrder: position has wrong state {self.main_order.state } {self.symbol}")
+            return
 
-            self.changeSL( d_stop_loss )
+        return self._send_order()
+    
 
-            return True
-        return False
 
-    def readPosition(self):
-        self.pos = self.exc.FetchOpenPosition(self.sym)
-        self.entry_price = self.pos['entryPrice']
-        if self.entry_price is not None:
-            #self.type = self.pos['type']
-            self.side = self.pos['info']['side'].lower()
-            self.size = float(self.pos['info']['size'])
-            self.order_price = self.entry_price
+        self.open['state'] = orderState.Pending
+        self.monitor.logInfo(f"Position: openOrder: {self.open} {self.sym}")
 
-            return True
-        return False
+        self.open['order'].openMaker_Market()
+        self.orders.append( self.open['order'] )
 
-    def waitOpenPosition(self, timeout=1):
-        while timeout > 0:
-            self.pos = self.exc.FetchOpenPosition( self.sym )
-            self.entry_price = self.pos['entryPrice']
-            if self.entry_price is not None:
-                return True
-            time.sleep(1)
-            timeout -= 1
+        self.open['state'] = orderState.Active
 
-        return False
 
-    def addTP(self, size, d_price, d_tr_price = 1):
-        if self.side == 'buy':
-            side = 'sell'
-            tp_price = self.order_price + d_price
-            tr_price = tp_price - d_tr_price
+
+    def run(self, action):
+        actions = action.split('|')
+        
+        if 'open' in actions and self.open['state'] != 'created':
+            self.exc.logError(f"Position: run: position already opened {self.sym}")
+            return
+        
+        for act in actions:
+            if act == 'open':
+                self.open['order']= BybitOrder.CreateMarketOrder(self.exc, self.symbol,
+                                                                 self.open['side'],
+                                                                self.open['coins'],
+                                                                self.open['usdt'],
+                                                                self.leverage   )
+                
+            elif act == 'stoploss':
+                self.stopLoss()
+                self.open['order'].add_StopLossData(    )
+
+            elif act == 'takeprofit1':
+                self.takeProfit1()
+                self.open['order'].add_TakeProfitData(   )
+
+            elif act == 'takeprofit2':
+                self.takeProfit2()
+
+            elif act == 'takeprofit3':
+                self.takeProfit3()
+            else:
+                self.monitor.logError(f"Position: run: unknown action {act}")
+
+        self.open['order'].openMaker_Market()
+
+
+
+    def modify(self, order_type, sl_price=0, usdt=0):
+        if order_type == 'stoploss':
+            self.stopLoss = {'sl_price': sl_price, 'usdt': usdt}    
+        elif order_type == 'takeprofit1':
+            self.takeProfit1 = {'tp_price': sl_price, 'usdt': usdt}
+        elif order_type == 'takeprofit2':
+            self.takeProfit2 = {'tp_price': sl_price, 'usdt': usdt}
+        elif order_type == 'takeprofit3':
+            self.takeProfit3 = {'tp_price': sl_price, 'usdt': usdt} 
         else:
-            side = 'buy'
-            tp_price = self.order_price - d_price
-            tr_price = tp_price + d_tr_price
+            self.monitor.logError(f"Position: modify: unknown order_type {order_type}")
 
-        param = {
-            'takeProfitPrice': tr_price,
-            'tpSize': str(size),
-            'positionIdx': 0,
-            'PositionTpSl': True
-        }
-        self.exc.CreateTakeProfitandStopLoss2( self.sym, 'limit', side, size, tp_price, param=param )
+    def cancel(self, action):
+        actions = action.split('|')
+        for act in actions:
+            if act == 'stoploss':
+                self.stopLoss = None    
+            elif act == 'takeprofit1':
+                self.takeProfit1 = None
+            elif act == 'takeprofit2':
+                self.takeProfit2 = None
+            elif act == 'takeprofit3':
+                self.takeProfit3 = None 
+            else:
+                self.monitor.logError(f"Position: cancel: unknown action {act}")
+    
+    def close(self):
+        self.monitor.logInfo(f"Position: close position {self.sym}")
+        # close all orders and position on exchange
 
-
-    def changeSL(self, d_price ):
-
-        orders = self.exc.FetchOpenOrders( self.sym )
-        for ord in orders:
-            if ord['stopLossPrice'] is not None:
-                self.stop_loss = self.entry_price + d_price if ord['side'].lower() == 'buy' else self.entry_price - d_price
-                self.exc.EditOrder2( ord['id'], self.sym, ord['type'], ord['side'], ord['amount'], param={'stopLossPrice': self.stop_loss })
-                return True
-        """            
-            self.stop_loss  = self.order_price - d_stop_loss if self.side == 'buy' else self.order_price + d_stop_loss
-            # side for stopLoss order is invers to open order
-            side = 'buy' if self.side == 'sell' else 'sell'
-            self.exc.EditOrder2( self.sl_id, self.sym, 'market', side, self.size, param={'stopLossPrice': self.stop_loss} )
+    def coinPrice(self):
         """
-        return False
+        Get the current price of the coin.
+        :return: Current coin price.
+        """
+        return self.exc.get_ticker_price( self.symbol )
 
+    def coinAmount(self, usdt ):
+        return usdt * self.leverage / self.coinPrice()  # number of coins
 
-    def print(self):
-        print( f" Open:  {self.type}  {self.side}  {self.size} ")
-        print( f" Open:  {self.order_price}  {self.entry_price}  stopLoss: {self.size}  {self.stop_loss}")

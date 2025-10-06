@@ -1,0 +1,15 @@
+{
+#  "OutFolder": "MTMonitor",
+  "LogFile"  : "TMonitor-",
+  
+  "channelList": {
+	  
+	"XStars" 					: -1001891566455,
+    "Канал Тимофея" 			: -1001947730509,
+    "Crypto Pump Club Official" : -1002648120948,
+	  
+    "Sig1":  -1002924090642,
+    "Sig2":  -1003191926485 
+  }
+	
+}

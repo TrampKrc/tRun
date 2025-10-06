@@ -5,13 +5,15 @@ import sys
 from datetime import datetime
 from time import localtime, strftime
 #import logging
-import tools as T
 from abc import ABC, abstractmethod
 
-#from pprint import pprint
+import config as acfg
+import tools as T
 
-root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(root + '/python')
+
+#from pprint import pprint
+#root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+#sys.path.append(root + '/python')
 
 import ccxt  # noqa: E402
 """
@@ -28,7 +30,7 @@ exchange = ccxt.binance ({
 exchange.options['adjustForTimeDifference'] = False
 """
 
-class base_Exchange( object ):
+class base_Exchange( T.CfgAPI ):
 
     _name  : str = ''
     _apiKey: str = ''
@@ -41,34 +43,12 @@ class base_Exchange( object ):
 
     _ex_cfg :   dict = {}
 
-    @property
-    def all_cfg(self):
-        return self._cfg_data.cfg_all
-
-    @property
-    def jc(self):
-        return self._cfg_data
-
-    def logInfo(self, *args, **kwargs):
-        self._cfg_data.logInfo(*args, **kwargs)
-
-    def logDebug(self, *args, **kwargs):
-        self._cfg_data.logDebug(*args, **kwargs)
-
-    def logError(self, *args, **kwargs):
-        self._cfg_data.logError(*args, **kwargs)
-
-    def logException(self, *args, **kwargs):
-        self._cfg_data.logException(*args, **kwargs)
-
-
     def __init__(self, ex_name, cfg_data ):     # cfg_data -> CfgJson class
-        #super().__init__( cfg_file, cfg, section )
+        super().__init__( cfg_data )
 
         self._name = ex_name
-        self._cfg_data = cfg_data
 
-        f_name = self._cfg_data.cfg_all.get("Secrets")
+        f_name = acfg.secrets
         if os.path.exists( f_name ):
             cfg_sec = T.read_json( f_name )
 
@@ -83,7 +63,7 @@ class base_Exchange( object ):
 
         self._exchange = None
 
-        self._cfg_data.logInfo(f"CCXT Version: {ccxt.__version__}")
+        self.logInfo(f"CCXT Version: {ccxt.__version__}")
 
         self._cl_name = self.__class__.__name__
 
@@ -129,7 +109,6 @@ class base_Exchange( object ):
       """
       return ''.join( [ k['vFmt'].format( el[k['Val']]) for k in tdict ])
 
-
     def position_heads(self):
       return  self._str_heads( self._pos_format )
 
@@ -143,12 +122,11 @@ class base_Exchange( object ):
       return  self._str_values( self._order_format, order )
 
     def log_balance(self, balance = None):
-      self.printInfo( "-----------------  Balance  ----------------------", False)
+      self.logInfo( "-----------------  Balance  ----------------------", False)
   
       data = balance if balance else self._activeBalances
       for cc, bal in data.items():
         self.printInfo( bal, False )
-
 
     def log_positions(self, positions=None):
       self.printInfo( " ------------------  Positions: {} ----------------".format(len(self._activePositions)))

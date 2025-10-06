@@ -15,27 +15,34 @@ class THistory( TClient ):
     
     def dbOpen(self):
         pass
-    
-    def dbClose(self):
+
+    def startChannel(self):
         pass
-        
+
     # should be defined:
     def process_msg(self, msg):
         return False
 
-    """
-    
-    """
-    
-    def __init__(self, cfg_file="cfg.json", section="Channel", jclass=None, parser=None ) -> None:
+    def closeChannel(self):
+        pass
+
+    def dbClose(self):
+        pass
+        
+
+    def __init__(self, cfg_file="cfg.json", section="ChannelList", jclass=None ) -> None:
 
         if jclass is not None:
-            self.jdata = jclass
+            jdata = jclass
         else:
-            self.jdata = T.CfgJson( cfg_file= cfg_file, section=section)
+            jdata = T.CfgJson( cfg_file= cfg_file, section=section)
 
-        super().__init__( self.jdata, section)
+        super().__init__( jdata, section)
 
+        #if section == "ChannelList":
+        self.channelList = self.cfg_section # list of channels to process
+
+        """
         channel_name = ""
         if parser is None:
             channel_name = self.channel_cfg.get("Name", None )
@@ -46,8 +53,8 @@ class THistory( TClient ):
 
         if self.channel_parser is None:
             raise ValueError( f"Parser for channel {channel_name} Nof found cfg file: {cfg_file} ")
-
-        self.dbInit( self.jdata )
+        """
+        self.dbInit( self.base )
 
     async def Start(self):
         self.dbOpen()
@@ -55,28 +62,63 @@ class THistory( TClient ):
 
     # call from self.TClient_Start()
     async def Run(self):    # Read History
-        self.logInfo(f"Read history: channelId {self.channel_cfg["Id"]} - {self.channel_cfg['Name']}")
 
-        chat_id = self.section_cfg["Id"]
-        limit  = self.section_cfg["HistoryLimit"]
+        channelName_list = list(self.channelList.keys())
+        id_chn = await self.find_channel_ids(filter=channelName_list )
 
-        # convert to local timezone:
-        local_tz = datetime.now().astimezone().tzinfo
+        if len(id_chn) == 0:
+            raise Exception("No channel Ids were found" )
 
-        s_date = self.section_cfg["HistoryStart"]
-        s_date_o = datetime.fromisoformat(s_date)
-        s_date_l = s_date_o.astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S')
+        for channel_name, section_desc in self.channelList.items():
+            if section_desc[0] == '-':
+                self.logInfo(f"Channel <{channel_name}> skipped, section starts with '-' prefix")
+                continue  # skip sections with '-' prefix
 
-        e_date = self.section_cfg["HistoryEnd"]
-        e_date_o = datetime.fromisoformat(e_date)
-        e_date_l = e_date_o.astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S') #local date
+            self.cfg_channel_desc = self.cfg_all.get( section_desc, None )
 
-        self.logInfo(f"Original Date interval: StartDate: {s_date} EndDate: {e_date} ")
-        self.logInfo(f"Read channel history: StartDate: {s_date_l} EndDate: {e_date_l} Limit: {limit}")
+            if self.cfg_channel_desc is None:
+                self.logError(f"Channel section {section_desc} not found in config file ")
+                continue
 
-        await  self.get_chanel_history_cycle( chat_id, s_date_l, dateEnd=e_date_l, limit=limit )
+            self.cfg_channel_desc["Name"] = channel_name
+            if self.cfg_channel_desc.get("Id", 0) == 0:
+                c_id = id_chn.get(channel_name, None)
+                if c_id is None:
+                    self.logError(f"Channel id for <{channel_name}> not found in Telegram. Check the name or Id.")
+                    continue
+                self.cfg_channel_desc["Id"] = c_id
 
-        # all events had been proceed; call self.Close()
+            self.channel_parser = pt.get(channel_name, pt['EmptyParser'] )
+
+            if self.channel_parser == pt['EmptyParser']:
+                #raise ValueError(f"Parser for channel {channel_name} Nof found cfg file: {cfg_file} ")
+                self.logError(f"Parser for channel <{channel_name}> is not implemented, using EmptyParser")
+
+            self.logInfo(f"Read history: channelId {self.cfg_channel_desc["Id"]} - {self.cfg_channel_desc['Name']}", cl='green2')
+
+            limit   = self.cfg_channel_desc["HistoryLimit"]
+
+            # convert to local timezone:
+            local_tz = datetime.now().astimezone().tzinfo
+
+            s_date = self.cfg_channel_desc["HistoryStart"]
+            s_date_o = datetime.fromisoformat(s_date)
+            s_date_l = s_date_o.astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S')
+
+            e_date = self.cfg_channel_desc["HistoryEnd"]
+            e_date_o = datetime.fromisoformat(e_date)
+            e_date_l = e_date_o.astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S') #local date
+
+            self.logInfo(f"Original Date interval: StartDate: {s_date} EndDate: {e_date} ")
+            self.logInfo(f"Read channel history: StartDate: {s_date_l} EndDate: {e_date_l} Limit: {limit}")
+
+            self.startChannel()
+            await self.get_chanel_history_cycle( self.cfg_channel_desc["Id"], s_date_l, dateEnd=e_date_l, limit=limit )
+            self.closeChannel()
+
+        self.logInfo("History reading finished.")
+
+    # all channels had been proceed; call self.Close()
 
     def Close(self):
         self.dbClose()

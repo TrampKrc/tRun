@@ -1,15 +1,13 @@
 
-import p_template
-
-import p_crypto_daniel
-import p_master_trade
-
+import p_sample, p_xstars, p_timofey, p_crypto_pump_club
 
 parser_table = {
 
-    p_crypto_daniel.channel_name : p_crypto_daniel.parser,
-    p_master_trade.channel_name :  p_master_trade.parser,
+    'XStars'                    : p_xstars.parser,
+    'Канал Тимофея'             : p_timofey.parser,
+    'Crypto Pump Club Official' : p_crypto_pump_club.parser,
 
-    p_template.channel_name : p_template.parser
-
+    'Sig1' :        p_sample.parser,
+    'Sig2' :        p_sample.parser,
+    'EmptyParser' : p_sample.empty_parser
 }

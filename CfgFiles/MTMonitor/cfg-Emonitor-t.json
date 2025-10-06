@@ -1,0 +1,23 @@
+{
+    "TMonitor": {
+        "UserId"   : 0,
+        "Names1"   : [
+            "Sig1",
+            "Sig2",
+
+			"Мастерство трейдинга", 
+			"API_by_Cryptonec",
+			"Cornix Notifications",
+			"CRYPTO WHALE [ VIP ]"
+		],
+
+        "FilesDir": "C:\\Repo\\V3\\Files\\H22\\",
+        "OutFolder":     "l-H1-T",
+        "MonitorMinutes": 0
+	},
+
+    "EMonitor": {
+        "FilesDir": "C:\\Repo\\V3\\Files\\H22\\",
+        "OutFolder":     "l-H1-TE"
+    }
+}

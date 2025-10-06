@@ -5,7 +5,7 @@ from pprint import pprint
 from datetime import datetime as dt, timezone, timedelta
 from time import localtime, strftime
 
-from colorPrint import colorPrint as cp
+from colorPrint import colorPrint as clp
 import config as acfg
 #root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 #sys.path.append(root + '/python')
@@ -21,20 +21,28 @@ PrjFolder=acfg.main_folder
 CfgFolder= acfg.cfg_files
 
 cfg_default = {
-    'CfgFolder': acfg.cfg_files,
-    'OutFolder' : "UnDef-",
+    # optionally, by default:
+    #'InFiles': acfg.cfg_files,
 
+    'OutFiles' : ''   #full path to output folder acfg.out_files + 'OutFiles'
+
+    #'LogFile': None,  # by default no log file
+    # full path: os.path.join( self.out_folder, self.log_file + strftime("%m%d%Y-%H%M%S.log", localtime()) )
+    """
+    optionally, by default:
     "Section": {
-        'CfgFolder': acfg.cfg_files,
-        'OutFolder': "UnDef-"
+        'InFiles':  "input folder",
+        'OutFiles': "out folder",
+        'LogFile': "logfile",
     }
+    """
 }
 
 class CfgJson(object):
     _cfg_all: dict
     is_running: bool
 
-    def __init__(self, cfg_file=None, section=None, cfg_mem=None, lname='Logger', prefix='Loger' ) -> None:
+    def __init__(self, cfg_file=None, section=None, cfg_mem=None, prefix='Loger' ) -> None:
 
         self.prefix = prefix
 
@@ -43,7 +51,7 @@ class CfgJson(object):
 
         if cfg_file is not None:
             if os.path.exists( cfg_file ):
-                self._cfg_all = read_json( cfg_file )
+                self._cfg_all = read_json_comment( cfg_file )
             else:
                 st = f"Nof found cfg file: {cfg_file} "
                 raise ValueError( st )
@@ -62,19 +70,15 @@ class CfgJson(object):
         else:
             self._cfg_section = self.cfg_all
 
-        self.cfg_folder = self._cfg_section.get("CfgFiles", self.cfg_all.get( "CfgFiles", acfg.cfg_files ))
-        self.out_folder = self._cfg_section.get("OutFiles", self.cfg_all.get( "OutFiles", acfg.out_files ))
+        self.in_folder = self.cfg_section.get("InFiles", self.cfg_all.get( "InFiles", acfg.cfg_files ))
+        self.in_folder = os.path.join( acfg.cfg_files, self.in_folder )
 
-        self.log_file = self._cfg_section.get("LogFile", self.cfg_all.get( "LogFile", None ))
+        self.out_folder = self.cfg_section.get("OutFiles", self.cfg_all.get( "OutFiles", '' ))
+        self.out_folder = os.path.join( acfg.out_files, self.out_folder )
 
-        if self.log_file:
-            self.filename = os.path.join( self.out_folder, self.log_file + strftime("%m%d%Y-%H%M%S.log", localtime()) )
-            logging.basicConfig(
-                filename=self.filename, encoding='utf-8', filemode='w', format='%(asctime)s %(message)s',
-                datefmt='%m/%d/%Y %H:%M:%S', level=logging.INFO)  ##DEBUG)
+        self.tmp_filename = os.path.join(self.out_folder, prefix + '_temp_storage-' + strftime("%m%d%Y-%H%M%S.log", localtime()))
 
-            self.log = logging.getLogger( 'Logger' )
-            self.logInfo(f"Open LogFile: {self.filename}", c=cp.green2 )
+        self.log_file = None
 
     @property
     def cfg_all(self):
@@ -85,16 +89,33 @@ class CfgJson(object):
         return self._cfg_section
     
     def _to_screen(self, level, *args, **kwargs):
-        st = f"{dt.now()}  {self.prefix} {level}" + cp.make_str( *args, **kwargs)
+        st = f"{dt.now()}  {self.prefix} {level}" + clp.make_str( *args, **kwargs)
 
         if kwargs.get( 'file_only', None) is None:
-            spec = kwargs.get( 'c', cp.getSpec(kwargs.get('cl', '') ))
-            cp.row_print( spec, st)
+            spec = kwargs.get( 'cs', clp.getSpec(kwargs.get('cl', '') ))
+            clp.row_print( spec, st)
         return st
 
     def cprint(self, spec, *args, **kwargs):
-        st = f"{dt.now()}  {self.prefix} " + cp.make_str( *args, **kwargs)
-        cp.row_print( spec, st )
+        st = f"{dt.now()}  {self.prefix} " + clp.make_str( *args, **kwargs)
+        clp.row_print( spec, st )
+
+    def openLog(self, logFile=None, lname='Logger'):
+
+        if logFile:
+            self.log_file = logFile
+        else:
+            self.log_file = self._cfg_section.get("LogFile", self.cfg_all.get("LogFile", None))
+
+        if self.log_file:
+            self.log_filename = os.path.join( self.out_folder, self.log_file + strftime("%m%d%Y-%H%M%S.log", localtime()) )
+
+            logging.basicConfig(
+                filename=self.log_filename, encoding='utf-8', filemode='w', format='%(asctime)s %(message)s',
+                datefmt='%m/%d/%Y %H:%M:%S', level=logging.INFO)  ##DEBUG)
+
+            self.log = logging.getLogger( lname )
+            self.logInfo(f"Open LogFile: {self.log_filename}", cs=clp.green2 )
 
     def logInfo(self, *args, **kwargs):
         st = self._to_screen( 'Info: ', *args, **kwargs)
@@ -102,13 +123,13 @@ class CfgJson(object):
 
     def logError(self, *args, **kwargs):
         kwargs['long'] = 1
-        kwargs['c'] = cp.red + cp.bold
+        kwargs['cs'] = clp.red + clp.bold
         st = self._to_screen( 'Error: ', *args, **kwargs)
         if self.log_file:  self.log.error( st )
 
     def logDebug(self, *args, **kwargs):
         kwargs['long'] = 1
-        kwargs['c'] = cp.yellow
+        kwargs['cs'] = clp.yellow
         st = self._to_screen( 'Debug: ', *args, **kwargs)
         if self.log_file:  self.log.debug(st)
 
@@ -138,17 +159,17 @@ class CfgAPI( object ):
     def cprint(self, spec, *args, **kwargs):
         return self.base.cprint( spec, *args, **kwargs)
 
-    def print_r(self, *args, **kwargs):
-        return self.base.cprint( cp.red, *args, **kwargs )
+    def print_red(self, *args, **kwargs):
+        return self.base.cprint( clp.red, *args, **kwargs )
 
-    def print_g(self, *args, **kwargs):
-        return self.base.cprint( cp.green, *args, **kwargs )
+    def print_green(self, *args, **kwargs):
+        return self.base.cprint( clp.green, *args, **kwargs )
 
-    def print_b(self, *args, **kwargs):
-        return self.base.cprint( cp.blue, *args, **kwargs )
+    def print_blue(self, *args, **kwargs):
+        return self.base.cprint( clp.blue, *args, **kwargs )
 
-    def print_y(self, *args, **kwargs):
-        return self.base.cprint( cp.yellow, *args, **kwargs )
+    def print_yellow(self, *args, **kwargs):
+        return self.base.cprint( clp.yellow, *args, **kwargs )
 
     def logInfo(self, *args, **kwargs):
         self.base.logInfo( *args, **kwargs)
@@ -234,8 +255,6 @@ class mash(object):
         return self.unpack(self)
 #================================================
 
-
-
 def argStr(*args):
     return ' '.join([str(arg) for arg in args])
 
@@ -249,6 +268,20 @@ def dump_error(*args):
     print(string)
     sys.stderr.write(string + "\n")
     sys.stderr.flush()
+
+def read_json_comment( fn_name ):
+    with open( fn_name, 'r', encoding='utf-8') as f:
+        lines = f.readlines()
+    # Remove comment lines
+    clean_lines = [
+        line for line in lines
+        if not line.strip().startswith('//') and not line.strip().startswith('#')
+    ]
+    json_str = ''.join(clean_lines)
+    try:
+        return json.loads(json_str)
+    except:
+        raise Exception('json file %s is invalid:\n%s' % (fn_name, sys.exc_info()[1]))
 
 def read_json( fn_name ):
     with open( fn_name, 'rb') as f:
@@ -301,6 +334,9 @@ def save_to_json( file, data ):
    else:
         print( "Can not store data in json format. Processing failed!" )
         return 1
+
+def str_DateTime( format="%m%d%Y-%H%M%S", dt=localtime() ):
+    return strftime( format, dt )
 
 def LocalTimeZone():
     now = dt.now()
@@ -368,7 +404,7 @@ def test_1():
 
     print("=================== SECOND =====")
     jdata.logInfo( 10, "wsw", jdata.__dict__ )
-    jdata.logInfo( 'green', c=cp.green2)
+    jdata.logInfo( 'green', c=clp.green2)
 
 
 if __name__ == '__main__':
@@ -379,8 +415,8 @@ if __name__ == '__main__':
     pprint( jdata )
 
     jdata.logInfo( 'No color 1', 'No color 2!' ) #, file_only=True )
-    jdata.logInfo( 'red', 'Hello, World!', c=cp.red ) #, file_only=True )
-    jdata.logInfo(  'green', 'Hello, World!', c=cp.bold+cp.italic)
+    jdata.logInfo( 'red', 'Hello, World!', c=clp.red ) #, file_only=True )
+    jdata.logInfo(  'green', 'Hello, World!', c=clp.bold+clp.italic)
 
-    cp.p_blue( 'Hello, World!\n' )
-    jdata.cprint( cp.yellow + cp.bold, 'Hello, World!' )
+    clp.p_blue( 'Hello, World!\n' )
+    jdata.cprint( clp.yellow + clp.bold, 'Hello, World!' )

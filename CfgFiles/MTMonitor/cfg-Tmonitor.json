@@ -1,0 +1,139 @@
+{
+  "OutFolder": "MTMonitor",
+  "LogFile"  : "TMonitor",
+  
+  "channelList": {
+	  
+	"XStars" 					: 0,
+    "Канал Тимофея" 			: 0,
+    "Crypto Pump Club Official" : 0,
+	  
+    "Sig1":    0,
+    "Sig2":    0
+  },
+
+
+
+  "channelListFull": {
+
+    "Cornix Notifications":           0,
+    "ADUVAN SIGNALS 🌼":              0,
+    "Crypto Trends and Analytics":    0,
+    "PumpTheory":                     0,
+    "Путь к миллиону | Андрей BTC" :  0,
+    "API чат единого аккаунта" :      0,
+    "#CC | Alexander Finch ️":          0,
+    "Crypto Angel Chat" :             0,
+    "Alexey Ataman Cryptobot" :       0,
+    "Alexey Ataman | Crypto 🐋" :     0,
+    "Pay Sirius Indicators" :         0,
+    "Sirius Trading Company" :        0,
+    "CryptoGrad" :                    0,
+    "Crypto Trends and Analytics" :   0,
+    "VENIVIDIVICI️" :                   0,
+    "Богатый Папа Ӏ Блог Трейдера" :  0,
+    "Богатый Папа 💸" :               0,
+    "Joe007 Bitfinex Whale 🍃" :      0,
+    "Александр Гусев | Торговый клуб": 0,
+    "Aleksey Mayer ZR" :              0,
+    "CRYPTO UNIVERSE" :               0,
+    "RocketToTheMoon" :  0,
+    "Душевный трейдинг" :  0,
+    "BIG TRADER" :  0,
+    "BTC LONG/SHORT" :  0,
+
+    "Hate Trade | Академия Трейдинга" :  0,
+    "Trendoman \"Торговые сигналы\" 📈📉" :   0,
+    "Crypto Daily – биткоин, криптовалюта" :   0,
+    "Binance futures & spot signals" :   0,
+    "Litvinoff" :   0,
+    "Ученик Сатоши" :   0,
+    "Адам и Ева" :   0,
+    "ArtTrade" :   0,
+    "Криптомейкер" :   0,
+    "Cornix Notifications" :   0,
+    "Cornix Trading Bot" :   0,
+    "TrendUp Crypto" :   0,
+    "24/7RADE👨🏻‍💻" :   0,
+    "5%" :   0,
+    "BIG TRADER" :  0,
+
+    "YK_S1":                          0,
+    "YK-Sig":                         0,
+    "ToStudy":                        0
+  },
+
+  "NotFound": {
+    "Мастерство трейдинга":      0,
+    "Crypto Daniel":             0,
+    "Trade Indicator 🚀":        0,
+    "Crypto Angel - [VIP]":      0,
+
+    "Crypto Yoda Channel (RU)":  0,
+    "Bitcoin Mafia":             0,
+    "Altseason Signals":         0,
+    "Market Maker":              0,
+    "Slivaeminfo.ru":            0,
+    "Crypto Pirates Channel":    0,
+    "Yo Crypto":                 0,
+    "Trader 80/20":              0,
+    "Elite Traders":             0,
+    "Crypto Navigator":          0,
+    
+    "Криптан":                   0,
+    "Криптонец":                 0,
+    "Криптонс":                  0
+  },
+  
+  "AAAAAAAA": {
+    "-Мастерство трейдинга":     -1001500911313,
+
+    "-Crypto Daniel":            -1001633253042,
+    "-Trade Indicator 🚀":       -1001869173929,
+    "-Криптонец":                -1001768035392,
+
+    "-Cornix Notifications":      605763187,
+
+    "-Crypto Angel - [VIP]":      0,
+    "-Криптонс":                  0,
+    "-Crypto Yoda Channel (RU)":  0,
+    "-Bitcoin Mafia":             0,
+    "-Altseason Signals":         0,
+    "-Market Maker":              0,
+    "-Slivaeminfo.ru":            0,
+    "-Crypto Pirates Channel":    0,
+    "-Yo Crypto":                 0,
+    "-Trader 80/20":              0,
+    "-Elite Traders":             0,
+
+    "-Crypto Navigator":          0,
+    "-Криптан":                   0,
+    "-Crypto Signals 2":          0,
+    "Crypto Signals 3":          0,
+    "Crypto Signals 4":          0
+    
+  },
+
+	"EMonitor": {
+			"FilesDir": "H22\\",
+			"OutFolder":     "l-H1-TE"
+		},
+
+
+
+    "TMonitor": {
+        "UserId"   : 0,
+        "Names1"   : [
+			"YK_S1", 
+			"Мастерство трейдинга", 
+			"API_by_Cryptonec",
+			"Cornix Notifications",
+			"CRYPTO WHALE [ VIP ]"
+		],
+
+        "FilesDir": "C:\\Repo\\V3\\Files\\H22\\",
+        "OutFolder":     "l-H1-T",
+        "MonitorMinutes": 0
+	}
+	
+}

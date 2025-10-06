@@ -4,11 +4,9 @@ import sys
 import asyncio
 
 from datetime import datetime
-
-from pyrogram import Client
-#print (pyrogram.__version__)
 import tools
 
+from colorPrint import colorPrint as clp
 #root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 #sys.path.append(root + '/python')
 
@@ -16,22 +14,22 @@ folder0 = os.path.dirname(os.path.abspath(__file__))
 #sys.path.append(folder0 + '/Code')
 
 async def task_timer(count, period=300 ):
-    print(tools.pink(f'Start timer  {count} {datetime.now()}'))
+    clp.p_pink( f'Start timer  {count} {datetime.now()}')
     try:
         while count > 0:
             await asyncio.sleep(1)
 
             if count % period == 0:
-                print(tools.pink(f"Timer is working.... {count} sec"))
+                clp.p_pink(f"Timer is working.... {count} sec")
             count = count - 1
 
     except  asyncio.CancelledError as e:
         print('Exception CancelledError: timer', str(e), f'  {count}')
     
     finally:
-        print(tools.pink(f'Finally timer: {count}'))
+        clp.p_pink(f'Finally timer: {count}')
     
-    print(tools.pink(f'Exit timer  {count} {datetime.now()}'))
+    clp.p_pink(f'Exit timer  {count} {datetime.now()}')
     return count
 
 async def send_msg( tlgApp ):
@@ -446,13 +444,13 @@ async def get_chanel_history( tApp, c_id, dateStart, dateEnd=0, limit=32000):
         if message.text != None:
             k += 1
             if message.date <= date_start:
-                print( tools.pink('this msg is skipped =======================') )
-                print( k, tools.pink(message.date))
+                clp.p_pink('this msg is skipped =======================')
+                print( k, clp.cl_text(message.date, cs=clp.blue) )
                 print(message.text)
                 break
 
             #print('==>>>>>')
-            print( k, tools.yellow(message.date))
+            print( k, clp.cl_text( message.date, cs=clp.yellow))
             #print(message.text)
 
             resp.append( message )

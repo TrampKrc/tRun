@@ -2,9 +2,13 @@ from enum import Enum
 from dataclasses import dataclass
 from datetime import datetime as dt, timezone
 
-class OrderDirection(Enum):
+class OrderAct(Enum):
     Long = 1
     Short = -1
+
+class OrderSide(Enum):
+    Open  = 1
+    Close = -1
 
 class OrderType(Enum):
     Market = "market"
@@ -13,6 +17,7 @@ class OrderType(Enum):
     Info = "info"
 
 class OrderStatus(Enum):
+    Created = "created"
     Pending = "pending"
     Filled = "filled"
     Cancelled = "cancelled"
@@ -60,12 +65,13 @@ class Order_Info:
     entry_utc_timestamp: int = 0
 
     symbol: str = "" # BTC/USDT
-    direction: OrderDirection = OrderDirection.Long    # Long/Short
+    order_act: OrderAct = OrderAct.Long    # Long/Short
     order_type: OrderType = OrderType.Limit  # market/limit/info
-    order_side: int = 1    # open-1 / close-2
+    order_side: OrderSide = OrderSide.Open   # open 1 / close -1
 
     entry_price: list = None  # price_min, price_max
-    entry_volume: float = 0
+    entry_base_size: float = 0  # usdt before leverage
+    entry_coin_size: float = 0  # BTC
     entry_leverage: int = 10  # multipluer
     entry_leverage_type: int = 0   # cross(0)/isoleited(1)
 
@@ -74,7 +80,7 @@ class Order_Info:
     size: float = 0
 
     comment: str = ""
-    #status = None
+    status = OrderStatus.Rejected
     #err_flag = False
 
     def __post_init__(self):
@@ -108,26 +114,26 @@ class Order_Info:
 
         match side.lower():
             case 'open':
-                self.order_side = 1
+                self.order_side = OrderSide.Open
 
             case 'close':
-                self.order_side = 2
+                self.order_side = OrderSide.Close
 
             case _:
                 self.order_side = 0
 
-    def setDirection(self, direction: str ):
+    def setOrderAct(self, direction: str ):
         act = direction.lower()
-        if act in ['buy', 'long']:
-            self.direction = OrderDirection.Long
-        elif act in ['sell', 'short']:
-            self.direction = OrderDirection.Short
+        if act in ['buy', 'long', 'лонг']:
+            self.order_act = OrderAct.Long
+        elif act in ['sell', 'short', 'шорт']:
+            self.order_act = OrderAct.Short
         else:
             # Set side to 0 for unrecognized directions
             self.order_side = 0
 
     def is_buy(self):
-        return self.direction == OrderDirection.Long
+        return self.order_act == OrderAct.Long
 
     def p_str(self):
 
@@ -135,17 +141,17 @@ class Order_Info:
             return f" symbol:{self.symbol} \n text:{self.comment}\n"
 
         else:
-            return f"\n symbol:{self.symbol} \n\
-    direction:{self.direction}, order_type:{self.order_type}, order_side:{self.order_side}, \n\
-    entry_price:{self.entry_price}\n\
-    entry_volume:{self.entry_volume}\n\
+            return f"\nsymbol:{self.symbol} \n\
+    action:{self.order_act}, order_type:{self.order_type}, order_side:{self.order_side}, \n\
+    entry_price:{self.entry_price}  leverage:{self.entry_leverage}\n\
+    entry_base_size:{self.entry_base_size}    entry_coin_size:{self.entry_coin_size}\n\
     tpPrice:{self.tpPrice}\n\
     slPrice:{self.slPrice}\n"
 
 if __name__ == '__main__':
     # Test the Order_Info class
     m = Order_Info()
-    print(f"Order direction: {m.direction}")
+    print(f"Order direction: {m.order_act}")
     print(f"Order type: {m.order_type}")
     print(f"UTC now: {m.utc_now}")
 
@@ -154,8 +160,8 @@ if __name__ == '__main__':
     print(f"After setOrderType('market'), order_type: {m.order_type}")
 
     # Test setting direction
-    m.setDirection("short")
-    print(f"After setDirection('short'), direction: {m.direction}")
+    m.setOrderAct("short")
+    print(f"After setDirection('short'), direction: {m.order_act}")
     print(f"Is buy: {m.is_buy()}")
 
     # Test string representation

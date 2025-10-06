@@ -1,0 +1,80 @@
+{
+    "Secrets" : "c:\\Repo\\V3\\CfgFolder\\secrets.json",
+
+    "Monitor": {
+        "UserId"   : 0,
+        "Names1"   : [
+					"YK_S1", 
+					"Мастерство трейдинга", 
+					"API_by_Cryptonec",
+					"Cornix Notifications",
+					"CRYPTO WHALE [ VIP ]"
+				],
+
+        "FilesDir": "c:\\Repo\\V3\\CfgFolder\\H1\\",
+        "OutFolder":     "l-H1-",
+        "MonitorMinutes": 0,
+
+
+        "DbFile":      "db-H1.db",
+        "HistoryLimit": 2000000,
+        "HistoryStart": "2024-05-01 00:00:00-07:00",
+        "HistoryEnd":   "2024-05-31 00:01:00-07:00",
+        "Tables": [
+            {"H1_I":
+				{
+					"rId"      : "int Primary Key",
+					"MsgId"    : "int",
+					"Sym"      : "text",
+					"TDate"    : "text",
+					"UTCDate"  : "text",
+					"Direction": "integer",
+					"openMin"  : "real",
+					"openMax"  : "real",
+					"take1"    : "real",
+					"take2"    : "real",
+					"take3"    : "real",
+
+					"open"      : "real",
+					"dateTake1" : "text",
+					"dateTake2" : "text",
+					"dateTake3" : "text",
+
+					"priceMin" : "real",
+					"dateMin"  : "text",
+
+					"Note": "text"
+				}
+			},
+			
+            {"H1_O": {
+                "RecId":"integer PRIMARY KEY",
+                "I_RecId": "integer",
+                "Open": "real",
+                "Close": "real",
+                "Delta": "real",
+                "DeltaProc": "real",
+                "Open_Min": "real",
+                "Open_Max": "real",
+                "Close_Min": "real",
+                "Close_Max": "real",
+                "Frame_Min": "real",
+                "Frame_Min_Date": "text",
+                "Frame_Max": "real",
+                "Frame_Max_Date": "text"
+            }}
+        ]
+
+    },
+
+    "Par2": [ 12, 15, 16 ],
+
+    "Par3": [ {"aa":0 }, {"bb":1}  ],
+
+    "Par4" : [
+        {
+            "zz": 0,
+            "zzx": 1
+        }
+    ]
+}

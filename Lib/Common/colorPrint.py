@@ -51,9 +51,15 @@ class colorPrint( object ):
         return argStr( type, *args )
 
     @classmethod
+    def cl_text(cls, *args, **kwargs) -> str:
+        spec = kwargs.get('cs', cls.getSpec(kwargs.get('cl', '')))
+        buf = cls.make_str( *args, **kwargs)
+        return spec + buf + cls.reset
+
+    @classmethod
     def row_print(cls, spec, buf ):
-        print( spec, buf, cls.reset )
-        #print( spec + buf + color.reset )
+        #print( spec, buf, cls.reset )
+        print( spec + buf + cls.reset )
 
     @classmethod
     def s_print(cls, spec, *args, **kwargs):
@@ -65,11 +71,11 @@ class colorPrint( object ):
         cls.s_print( cls.getSpec( spec_text ), *args, **kwargs)
 
     @classmethod
-    def b_print( cls, spec_text, *args, **kwargs):
+    def p_bold( cls, spec_text, *args, **kwargs):
         cls.s_print( cls.getSpec( spec_text ) + cls.bold, *args, **kwargs)
 
     @classmethod
-    def i_print( cls, spec_text, *args, **kwargs):
+    def p_italic( cls, spec_text, *args, **kwargs):
         cls.s_print( cls.getSpec( spec_text ) + cls.italic, *args, **kwargs)
 
     @classmethod
@@ -96,6 +102,9 @@ class colorPrint( object ):
     def p_magenta( cls, *args, **kwargs):
         cls.s_print(cls.magenta, *args, **kwargs)
 
+    @classmethod
+    def p_pink( cls, *args, **kwargs):
+        cls.s_print(cls.pink, *args, **kwargs)
 
 def argStr( type, *args):
     if type == 'short':
@@ -122,10 +131,20 @@ if __name__ == '__main__':
         }
     }
 
-    colorPrint.t_print( 'red', ' red Hello, World!', cfg_default, '<--', long=90 )
+    colorPrint.row_print( colorPrint.red, 'red: Hello, World!')
+    colorPrint.row_print( colorPrint.red + colorPrint.bold, 'red bold: Hello, World!')
+
+
+    colorPrint.t_print( 'red', 'red: Hello, World!', cfg_default, '<--', long=90 )
     colorPrint.t_print('', 'Morning, World!', cfg_default, '<--')
-    colorPrint.b_print('', 'Morning, World!', cfg_default, '<--')
-    colorPrint.i_print('cyan', 'Morning, World!', cfg_default, '<--')
+
+    colorPrint.t_print('red+bold', ' red bold: Hello, World!', cfg_default, '<--', long=90)
+    colorPrint.t_print('red'+'bold'+'undeline', 'red bold underline: Hello, World!', cfg_default, '<--', long=90)
+
+
+
+    colorPrint.p_bold('', 'Morning, World!', cfg_default, '<--')
+    colorPrint.p_italic('cyan', 'Morning, World!', cfg_default, '<--')
 
     colorPrint.s_print( colorPrint.pink, 'pink, Hello, World!', cfg_default, '<--' )
 

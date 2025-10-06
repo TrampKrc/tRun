@@ -66,6 +66,13 @@ def proc_line(mask, line, flag=0):
     # if rcg and (data := rcg.groups()):
     return rcg.groups() if rcg else [None, None, None]
 
+def comp_line(mask, line, flag=0):
+    comp = re.compile(mask, flag)
+    rcg = comp.search( line, flag)
+
+    return (rcg.groups(), rcg.groupdict() ) if rcg else ([], {})
+
+
 def proc_lines(mask, lines, end_mask, m, flag=0):
     gr = None
     for line in lines:
@@ -83,3 +90,33 @@ def msg_text( msg ):
     text += "" if msg.text == None else msg.text
     text = "".join(text).replace("\n", " ")
     return text
+
+"""
+. (dot): Matches any character except newline
+^: Start of string
+$: End of string
+*: Zero or more repetitions
++: One or more repetitions
+?: Zero or one repetition, or makes preceding quantifier non-greedy
+[]: Character set
+(): Grouping
+|: Alternation (OR)
+\: Escape character
+{}: Quantifier for specific number of repetitions
+To match these characters literally, escape them with a backslash (\).
+
+\s : Matches any whitespace character (space, tab, newline).
+\S : Matches any non-whitespace character.
+\w : Matches any word character (alphanumeric & underscore).
+\W : Matches any non-word character.
+\d : Matches any digit (0-9).
+\D : Matches any non-digit.
+\b : Matches a word boundary.
+\B : Matches a non-word boundary.
+\A : Matches the start of the string.
+\Z : Matches the end of the string.
+\n : Matches a newline.
+\t : Matches a tab.
+\\ : Matches a literal backslash.
+
+"""

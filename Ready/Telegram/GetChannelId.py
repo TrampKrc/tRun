@@ -3,9 +3,8 @@ import os
 
 if __name__ == '__main__':
     import sys
-
     sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..','Lib')))
-    import config as cfg    
+
 
 import asyncio
 import config as acfg, tools as T
@@ -22,8 +21,9 @@ async def start():
     # await app.FindChannelId( fi, stop=False, limit=4)
 
     new_channel_ids = await app.FindChannelId( None, stop=False, limit=24)
-
-    T.save_to_json( os.path.join( acfg.cfg_files, "channel_names.json"), new_channel_ids)
+    print( new_channel_ids )
+    if len( new_channel_ids ) > 0:
+        T.save_to_json( os.path.join( acfg.cfg_files, "channel_names3.json"), new_channel_ids)
 
 
 if __name__ == '__main__':

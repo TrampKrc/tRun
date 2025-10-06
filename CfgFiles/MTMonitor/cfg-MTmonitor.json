@@ -1,0 +1,33 @@
+{
+# MTMonitor config:
+# All output to: acfg.out_files\MTMonitor
+    "OutFiles" : "MTMonitor",
+# LogFile: acfg.out_files\MTMonitor\MTMonitor-date.log	
+    "LogFile"  : "MTMonitor-",
+
+# Section for TMonitor:
+    "TMonitor": {
+		"OutFiles": "MTMonitor",
+		"LogFile" : "TMonitor-",
+  
+		"channelList": {
+			"XStars" 					: -1001891566455,
+			"Канал Тимофея" 			: -1001947730509,
+			"Crypto Pump Club Official" : -1002648120948,
+			  
+			"Sig1":  -1002924090642,
+			"Sig2":  -1003191926485 
+		  },
+		
+        "UserId"   : 0,
+        "MonitorMinutes": 0
+	},
+
+# Section for EMonitor:
+	"EMonitor": {
+		"OutFolder": "MTMonitor",
+		"LogFile"  : "EMonitor-"
+
+	}
+	
+}

@@ -1,33 +1,41 @@
-# This is a sample Python script.
-import asyncio
-import tools as T, gMessage as M, utils as U
 
-#from binance_exchange import binance_Exchange
+import asyncio, time
+
+if __name__ == '__main__':
+    import sys, os
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+import config as acfg
+
+import tools as T, gMessage as M, utils as U
+from colorPrint import colorPrint as clp
 
 from yk_bybit import yk_Bybit_demo
 #from bybit_exchange_pro import bybit_Exchange_pro
-from positions import bybitPosition
+
+from positions import BybitPosition, orderSide, orderType, orderState, orderData
+
 
 class TExchange(yk_Bybit_demo):
 
-    def __init__(self, p, jdata ):
+    def __init__(self, p, cfg_data ):
 
-        super().__init__( p["exc_keys"], jdata)
+        super().__init__( p["exc_keys"], cfg_data)
 
         queues = p['queues']
 
         if queues is not None:
-            self.q_ctrl_out   = queues[0]  # put a ctrl msg
-            self.q_ctrl_input = queues[1]  # get a ctrl msg
-            self.q_in         = queues[2]  # get a data from another worker thread ( TMonitor )
+            self.q_toMainMonitor   = queues[0]  # put a ctrl msg
+            self.q_fromMainMonitor = queues[1]  # get a ctrl msg
+            self.q_fromTMonitor    = queues[2]  # get a data from another worker thread ( TMonitor )
         else:
-            self.q_ctrl_out   = M.xQueue()  # put a ctrl msg
-            self.q_ctrl_input = M.xQueue()  # get a ctrl msg
-            self.q_in         = M.xQueue()  # get a data from another worker thread ( Exchange )
+            self.q_toMainMonitor   = M.xQueue()  # put a ctrl msg
+            self.q_fromMainMonitor = M.xQueue()  # get a ctrl msg
+            self.q_fromTMonitor    = M.xQueue()  # get a data from another worker thread ( Exchange )
 
         self.q_handler = M.xQueue() # get data from msg handlers
 
-        self.msgC = M.CtrlMsg('TExchange', 'mainThread')
+        self.msg_toMainMonitor = M.CtrlMsg('TExchange', 'MainMonitor')
         #self.msgO = M.CtrlMsg('TExchange', 'Thread-2')
 
         # position processing for channel:
@@ -45,39 +53,57 @@ class TExchange(yk_Bybit_demo):
 
         def test():
             sym = "BTC/USDT:USDT"
-            print(T.red(" after open"))
+            self.print_red(" after open")
 
-            pos = bybitPosition(self, sym)
+            pos = BybitPosition(self, sym)
 
             if pos.readPosition():
                 # pos.addTP(0.03, 100)
                 # print( bybit.FetchOpenOrders(sym))
                 pos.changeSL(100)
 
-        self.logInfo(" EMonitor: before open", c=T.green )
+        self.logInfo(" EMonitor: Starting....", cs=clp.yellow )
         #bybit = openBybit(path, cfg_file, section, exc_keys)
         self.connect(market='swap')
 
         # test(); return
 
-        self.msgC.body = "EMonitor initiated"
-        self.logInfo( self.msgC.date(), c=T.green )
+        self.msg_toMainMonitor.body = "EMonitor initiated"
+        self.logInfo( self.msg_toMainMonitor.date(), cs=clp.yellow )
         #self.q_ctrl_out.async_put_nowait(copy.deepcopy(msgX))
-        self.q_ctrl_out.async_put_nowait( self.msgC )
+        self.q_toMainMonitor.async_put_nowait( self.msg_toMainMonitor )
 
+        self.logInfo("EMonitor is started", cs=clp.yellow)
+
+        # main loop
+        start = time.perf_counter()
+
+        await self.main_loop( tout )
+
+        # exit from Run
+        duration = time.perf_counter() - start
+
+        self.logInfo(" EMonitor Stopped", cs=clp.yellow)
+
+        self.msg_toMainMonitor.status = 'Exit'
+        k = 1
+        self.msg_toMainMonitor.body = f'Exchange Monitor exit after {k} sec'
+        self.q_toMainMonitor.async_put_nowait(self.msg_toMainMonitor.date())
+
+        return
+
+    async def main_loop(self, tout):
         if tout > 0:
             check_timer = asyncio.create_task(U.task_timer( tout, 3600 ))
 
-        self.logInfo("Started")
-
-        # main loop
         is_running = True
+        start = time.perf_counter()
         k = 0
 
         while is_running and ( True if tout == 0 else check_timer.done() == False ):
             try:
                 if k % 300 == 0:
-                    self.logInfo( f"Exchange monitor is working.... {k} sec", c=T.green )
+                    self.logInfo( f"Exchange monitor is working.... {k} sec", cl='green' )
                     #self.msgC.body = f'==> to Main TMonitor are working.... {k} sec'
                     #self.q_ctrl_out.async_put_nowait( copy.deepcopy(self.msgC.date()) )
                     #print(T.blue("Msg to Main sent"))
@@ -87,52 +113,93 @@ class TExchange(yk_Bybit_demo):
                     #print(T.blue("Msg to Thread2 sent"))
 
                 # check ctrl queue from mainThread
-                while not self.q_ctrl_input.empty():
-                    msgQ = await self.q_ctrl_input.async_get()
-                    self.logInfo( "EMonitor: From Q_CTRL: ", msgQ, c=T.green )
-                    self.q_ctrl_input.task_done()
-
-                    if msgQ.status == 'Exit':
-                        is_running = False
+                await self.check_mainMonitor_queue()
 
                 # check data queue from TMonitor
-                while not self.q_in.empty():
-                    qMsg = await self.q_in.async_get() #class CtrlMsg
-                    self.logInfo( "EMonitor: from TMonitor queue:\n", qMsg, c=T.green )
-                    self.q_in.task_done()
-
-                    if qMsg.status == 'Order':
-                        #self.openPositionMT( qMsg )
-                        create_position = self.chan_call.get( qMsg.body._channel, None )
-                        if create_position is not None:
-                            create_position( qMsg )
-
-                        # notify mainThread
-                        self.msgC.body = "new position"
-                        self.q_ctrl_out.async_put_nowait(self.msgC.date())
-                        print(T.green("Msg to mainThread sent"))
+                await self.check_TMonitor_queue()
 
                 #check opened positions
 
             except Exception as e:
                 self.logInfo("MainLoop Exception: ", e)
-                self.jc.log.exception(e)
+                self.logException(e)
 
             await asyncio.sleep(1)
             k += 1
 
-        # exit from Run
-        self.logInfo(" EMonitor Stopped")
+    async def check_mainMonitor_queue(self):
 
-        self.msgC.status = 'Exit'
-        self.msgC.body = f'Exchange Monitor exit after {k} sec'
-        self.q_ctrl_out.async_put_nowait(self.msgC.date())
+        while not self.q_fromMainMonitor.empty():
+            msgQ = await self.q_fromMainMonitor.async_get()
+            self.logInfo("EMonitor read MainMonitor queue: ", msgQ, cs=clp.green)
+            self.q_fromMainMonitor.task_done()
 
-        return
-#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+            if msgQ.status == 'Exit':
+                is_running = False
 
-    def calculationAfter1(self, qMsg):
-        pass
+    async def check_TMonitor_queue(self):
+
+        while not self.q_fromTMonitor.empty():
+            qMsg = await self.q_fromTMonitor.async_get()  # class CtrlMsg
+            self.logInfo("EMonitor read TMonitor queue:\n", qMsg, cs=clp.green)
+            self.q_fromTMonitor.task_done()
+
+            if qMsg.status == 'Order':
+                if self.create_new_position( qMsg ) is not None:
+                    self.msgC.body = "new position was created"
+                else:
+                    self.msgC.body = "new position was not created"
+
+                # notify mainThread
+                self.q_toMainMonitor.async_put_nowait(self.msgC.date())
+                self.print_green("Msg to mainThread sent")
+
+    def create_new_position(self, qmsg ):
+
+        order_msg = qmsg.body   #  TMessage.Order_Info class
+
+        sym = order_msg.symbol  # BTC/USDT
+        # do we have opened position for this symbol ?
+        #
+        if self.FetchOpenPosition( sym ) is not None:
+            self.logInfo( f"Position for {sym} already exists. New position will not be created", cs=clp.red )
+            return None
+
+        leverage = order_msg.leverage # 30
+        np =BybitPosition( self, sym, leverage )
+
+        if order_msg.base_size > 0:
+            usdt = order_msg.base_size
+            coins = None
+        else:
+            usdt = None
+            coins = order_msg.coin_size
+
+        if usdt is None and coins is None:
+            self.logInfo( f"Position for {sym} has no size. New position will not be created", cs=clp.red )
+            return None
+
+        np.set_Main_order(order_msg.order_type, order_msg.order_act, usdt=usdt, coins = coins)
+
+        np.add_StopLoss_order( orderType.Market, sl_price= order_msg.slPrice[0] )
+        l = len( order_msg.tpPrice )
+        np.add_TakeProfit_order( 1, orderType.Market, tp_price= order_msg.tpPrice[ l-1 ] )
+
+        #pprint( np )
+        np.open()
+
+        for tp in order_msg.tpPrice[1:]:
+            if tp[0] > 0:
+                #np.open_TakeProfit_Part( usdt=tp[1], tp_price= tp[0] )
+                pass
+
+        self.logInfo(f"New position for {sym} is created", cs=clp.yellow)
+
+        # check position
+        # add to dictionary
+        # save dictionary to file
+    #>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
 
     def openPosition_Test(self, qMsg):
 
@@ -142,7 +209,7 @@ class TExchange(yk_Bybit_demo):
         side = pMsg.getDirection()  #'buy'
         size = pMsg.size
 
-        pos = bybitPosition(self, sym, side=side, size=size)
+        pos = BybitPosition(self, sym, side=side, size=size)
         tp = [0, 0, 0]
         tps = [0.04, 0.04, 0.02]
         sl = [0, 0]
@@ -168,7 +235,7 @@ class TExchange(yk_Bybit_demo):
     def openPosition(self, qMsg):
         # master trading
         pMsg = qMsg.body  # parserMsg
-        pos = bybitPosition(self, pMsg.symbol, side=pMsg.getDirection(), size=pMsg.size, leverage=pMsg.leverage)
+        pos = BybitPosition(self, pMsg.symbol, side=pMsg.getDirection(), size=pMsg.size, leverage=pMsg.leverage)
         rc = pos.openPosition( pMsg.tpPrice, pMsg.slPrice)
 
         self.logInfo( "Open position: ", pos.str() if rc else "Position was not open")
@@ -203,7 +270,7 @@ class TExchange(yk_Bybit_demo):
             if sl[0] == 0:
                 sl[0] = c_price * ( 1 - maxPriceChange ) if side == 'buy' else c_price * ( 1 + maxPriceChange )
 
-        pos = bybitPosition(self, sym, side=side, size=size, leverage=leverage)
+        pos = BybitPosition(self, sym, side=side, size=size, leverage=leverage)
         tp = pMsg.tpPrice
 
         tps = [ size*0.4, size*0.4, size*0.2]
@@ -215,46 +282,50 @@ class TExchange(yk_Bybit_demo):
         # print( bybit._exchange.fetch_my_trades( sym ) )
         return pos
 
-async def start_Exchange2( p ):
-    await asyncio.sleep(300)
-
+# this is main entry point
 async def start_Exchange( p ):
 
     # 1. read cfg file:
-    jdata = T.CfgJson( cfg_file=p['cfg_file'], section=p['section'], prefix="EMonitor", lname='Emonitor')
+    cfg_data = T.CfgJson( cfg_mem=p['cfg_mem'], prefix="EMonitor" )
+    cfg_data.openLog( lname='Emonitor')
 
     # 2. Init Exchange:
-    bybit = TExchange( p, jdata )
+    bybit = TExchange( p, cfg_data )
     await bybit.Start()
 
 #==================================
-async def async_Exchange():
+async def test_Exchange():
     cq_get = M.xQueue()     # mainThread will get
     cq_put = M.xQueue()     # mainThread will put
     dq12_put = M.xQueue()   # Tmonitor will put data for  exchange thread
     dq12_get = M.xQueue()   # Tmonitor will get data from exchange thread
 
+    cfg_data = T.CfgJson(acfg.cfg_files + "\\cfg-Emonitor.json")
+
     param = {
-        "cfg_file" : "c:/OneDrive/Bot/V2/Devl/Files/cfg-MTmonitor-1.json",
-        "section"  : "EMonitor",
-        "exc_keys" : 'ByBitDemoAll',
+        "cfg_mem"  : cfg_data.cfg_all,
+        #"section"  : "EMonitor",
+        "exc_keys" : acfg.bybit_key_demo,
         "queues"   : [cq_get, cq_put, dq12_put, dq12_get]
     }
+
     await start_Exchange( param )
 
 
 if __name__ == '__main__':
-    asyncio.run( async_Exchange() )
-    #start_Exchange( param )
+    asyncio.run( test_Exchange() )
 
 
-async def astart_Exchange(path, cfg_file, section, exc_keys, queue):
+async def start_Exchange_2( p ):
+    await asyncio.sleep(300)
+
+async def test_Exchange_2(path, cfg_file, section, exc_keys, queue):
     # 1. read cfg file:
     path = "/Files\\"
     jdata = T.CfgJson(cfg_file=path + "cfg-h1.json", section="ChannelH1")  # ,cfg=None )
 
     # 2. Init Exchange:
-    bybit = ykBybit_demo('ByBitDemoAll', jdata)
+    bybit = yk_Bybit_demo('ByBitDemoAll', jdata)
 
     #bybit.connect()
     bybit.connect( market='swap' )
