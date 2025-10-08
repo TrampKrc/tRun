@@ -1,5 +1,4 @@
 
-import sys
 import copy
 
 import os
@@ -36,6 +35,13 @@ class TMonitor( TClient ):
         self.q_handler = M.xQueue() # get data from msg handlers
 
 # ----------- configure ------------------
+
+        self.OrderFile = self.cfg_all.get("OrderFile", None)
+        if self.OrderFile:
+            self.OrderFile = self.OrderFile + T.str_DateTime("-%m%d%Y-%H%M%S") + ".txt"
+            self.OrderFile = os.path.join( acfg.out_files, self.OrderFile )
+            self.logInfo(f"File to save orders: {self.OrderFile}", cl='green2')
+
         # channelList  # name of section with list of channels for processing
         channels = self.cfg_all.get( channelList, None )
         if channels is None:
@@ -126,8 +132,8 @@ class TMonitor( TClient ):
     async def main_loop(self):
 
         if self.tout == 0:
-            if( limit := self.channel_cfg.get( "MonitorMinutes", None ) is not None ):
-                self.tout = limit * 60
+            if( limit := self.channel_cfg.get( "MonitorHours", None ) is not None ):
+                self.tout = int( limit * 60 * 60 )
 
         if self.tout > 0:
             check_timer = asyncio.create_task(U.task_timer( self.tout, period=3600 ))
@@ -243,24 +249,28 @@ class TMonitor( TClient ):
 
         if orderInfo is not None:
 
-            #s = self.jc.logInfo("Parser. put msg to queue", pMsg.__dict__())
-            #self.jc.logInfo("Parser. put msg to queue" + pMsg.__dict__())
-            t_ = orderInfo.p_str()
-            self.logInfo("ChooseChannel put msg to exchange queue\n" + t_, cs=clp.green )
+            try:
+                t_ = orderInfo.p_str()
+                self.logInfo("Put order to exchange queue:\n" + t_, cs=clp.green )
 
-            with open(self.base.filename+'.txt', 'w+', encoding='utf-8') as f:
-                f.write( t_ )
-                f.flush()
+                if self.OrderFile:
+                    with open(self.OrderFile, 'a+', encoding='utf-8') as f:
+                        f.write( f"From channel: {msg.chat.title}")
+                        f.write( t_ + '\n')
+                        f.flush()
 
-            # put to Order to Queue for TMonitor main thread
-            # dow we need wrapper to include channel/msg info ?
-            self.q_handler.async_put_nowait( orderInfo )
+                # put to Order to Queue for TMonitor main thread
+                # now we need wrapper to include channel/msg info ?
+                self.q_handler.async_put_nowait( orderInfo )
+            except:
+                self.logError('Error while putting msg to queue for EMonitor:\n%s' % (sys.exc_info()[1]))
 
             self.logInfo( f"Msg WorkHandler end; mds.date: {msg.date}", cs=clp.green)
 
         else:
             self.logInfo(f'ChooseChannel: {msg.chat.title}: Parser returns Nothing', cs=clp.green )
             self.logInfo( f"Msg WorkHandler end. no processing {msg.date}", cs=clp.green2)
+
 
     def choose_channel(self, msg ):
 

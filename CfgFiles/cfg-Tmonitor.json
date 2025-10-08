@@ -1,7 +1,10 @@
 {
 #  "OutFolder": "MTMonitor",
   "LogFile"  : "TMonitor-",
-  
+# file to save received orders
+  "OrderFile": "Orders",
+  "MonitorHours": 24,
+
   "channelList": {
 	  
 	"XStars" 					: -1001891566455,

@@ -1,10 +1,11 @@
 [project]
-name = "trun"
+name = "v3"
 version = "0.1.0"
 description = "Add your description here"
-readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pyrogram>=2.0.106",
+    "ccxt==4.4.98",
+    "pyrogram==2.0.106",
     "pytgcrypto>=1.2.11",
+    "winuvloop==0.2.0",
 ]
